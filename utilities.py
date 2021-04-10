@@ -18,18 +18,36 @@ def get_all_filenames():
     return years_files_dict
 
 
+def load_large_json_file(filename):
+    data = []
+    fp = open(filename)
+    lines = fp.readlines()
+    fp.close()
+    
+    for line in lines[1:-1]:
+        data.append(eval(line.strip()[:-1]))
+    data.append(eval(lines[-1].strip()[:-2]))
+    
+    # Finally, package the list into a format the other methods will understand
+    # (As a dictionary)
+    data = {'Items': data}
+    return data
+
+
 def load_data(filename):
     fp = open(filename)
     try:
         data = json.load(fp)
     except:
         print(filename, 'too big. Handle differently and not through conventional json loading.')
-        data = None
+        data = load_large_json_file(filename)
     fp.close()
     return data
 
 
 def filtered_article_count(data, language='en', subjects=None, subject_filter_type='any'):
+    if not data:
+        return None
     if subjects is None:
         return language_count(data, language)
     count = 0
