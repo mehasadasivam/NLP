@@ -39,7 +39,7 @@ def load_data(filename):
     try:
         data = json.load(fp)
     except:
-        print(filename, 'too big. Handle differently and not through conventional json loading.')
+        print(filename, 'too big. Handling line by line and not through conventional json loading.')
         data = load_large_json_file(filename)
     fp.close()
     return data
