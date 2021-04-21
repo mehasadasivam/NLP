@@ -5,8 +5,13 @@ TEMP_PATH = '/work/ms5941/NLP/Temp'
 OUTPUT_PATH = '/work/ms5941/NLP/Outputs'
 
 # We only want US articles
-SUBJECTS = ['N2:US']
+US_CODE = 'N2:US'
 
-#This are the topic codes that Thomson Reuters already has
-CODE_WORDS = ['INFL','GDP','']
+# This are the topic codes that Thomson Reuters already has
+
+INFLATION_CODE = 'N2:INFL'
+GDP_CODE = 'N2:GDP'
+
+
+START_YEAR = 1996
 
