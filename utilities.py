@@ -9,6 +9,23 @@ import pandas as pd
 import numpy as np
 import os
 
+from collections import defaultdict
+
+import gensim
+from gensim.test.utils import datapath
+
+import itertools
+import re
+
+
+# Use the natural language toolkit package
+import nltk
+
+# Stop Words: Load the nltk default English stopwords list:
+stopwords_list = nltk.corpus.stopwords.words('english')
+
+
+
 def get_all_filenames():
     folders = glob(os.path.join(DATA_PATH, '*'))
     years_files_dict = dict()
@@ -58,65 +75,75 @@ def filtered_article_count(data, language='en', subjects=None, subject_filter_ty
     return count
 
 
-# PLACEHOLDERS: EVERYTHING COPIED FROM BIGDATA HW FROM LAST YEAR
+# For Topic Model - Preliminary processing
 
-# TODO: Check if we need all the imports!
-# And is there another document term matrix api we can use? Not sure if we need all this (stemming probably not)
+def get_tokenized_articles(year, theme):
+    articles = dict()
+    
+    with open(TEMP_PATH + '/%s/%s_Article_Texts_v2_%s.json' % (theme, theme, year)) as f:
+        yyyymm_all_articles = json.load(f)
+    
+    for yyyymm in yyyymm_all_articles:
+        articles[yyyymm] = []
+        for text in yyyymm_all_articles[yyyymm]:
+            text.replace('\n', ' ')
+            sentences = nltk.sent_tokenize(text)
 
-from sklearn.feature_extraction.text import CountVectorizer
-
-# Use CountVectorizer's analyzer to process the articles
-analyzer = CountVectorizer(stop_words='english').build_analyzer()
-
-# The default analyzer doesn't stem, so we do some post-processing
-def own_analyzer(docstr):
-    return [stemmer.stem(wrd) for wrd in analyzer(docstr)]
-
-# The countvectorizer needed while building Python's DTM 
-cv = CountVectorizer(analyzer=own_analyzer)
-
-            
-def get_dtm_sparse_matrix(articles):
-    dtm_raw = cv.fit_transform([art['data']['body'] for art in articles if art['data']['body'] != ''])
-    return dtm_raw
-
-
-def get_required_word_idx_freq_list(dtm_sparse):
-    freq = dtm_sparse.sum(axis=0)  # sum along the columns --> returns a [1 x num cols] matrix
-    # The order of this is the same as in the cv.vocabulary_ lookup table
-    # Let's now associate the word label with its position in the dtm and its frequency count
-    named_freq = [(wrd, idx, freq[0, idx]) for wrd, idx in cv.vocabulary_.items()]
-
-    # Sort from highest to lowest frequency word (the order is preserved throughout)
-    named_freq = sorted(named_freq, key = lambda xx: xx[2], reverse=True)
-    # We only want the top 101-2100 frequent words 
-    reqd = named_freq[101:2101]
-    return reqd
+            text_words = []
+            for sentence in sentences:
+                sentence = re.sub(r'[^A-Za-z.]+', ' ', sentence)
+                sentence = sentence.replace('.', '') # Abbreviations - G.D.P
+                sentence = sentence.lower()
+                sent_words = nltk.word_tokenize(sentence)
+                sent_words = [word for word in sent_words if ((len(word) > 2) and (len(word) < 20))]
+                sent_words = [word for word in sent_words if (word not in stopwords_list) and word.isalpha()]
+                text_words.extend(sent_words)
+            articles[yyyymm].append(text_words)
+    
+    return articles
 
 
-def get_cosine_similarity_matrix(dtm_sparse, reqd_word_idx_list):    
-    reqd_idx = [el[1] for el in reqd_word_idx_list]
+def get_effective_vocabulary(articles):
+    """
+    Articles is a dictionary containing a list of lists for each month.
+    
+    """
+    all_words = itertools.chain.from_iterable(itertools.chain.from_iterable(articles.values()))
+    
+    # Get frequency counts, sort words by frequency
+    frequency_count = nltk.FreqDist(all_words)
+    words = np.array([word for word in frequency_count.keys()])
+    word_freq = np.array([word for word in frequency_count.values()])
+    freq_sort = np.argsort(word_freq)[::-1]
+    word_freq_sort = word_freq[freq_sort]
+    words_sorted = words[freq_sort]
+    
+    # Create effective vocabulary: Only keep the words that aren't the 50 most frequent, 
+    # and have a frequency of at least 2.
+    rank = 1
+    effective_vocab = list()
+    for object in words_sorted:
+        if (rank >= 50):
+            fc = frequency_count[object]
+            if (fc > 1):
+                effective_vocab.append(object)
+        rank += 1
+    print('Length of effective vocab:', len(effective_vocab))
+    return effective_vocab
 
-    # get the m and c matrixes
-    mm = dtm_sparse[:, reqd_idx]
-    c1 = (mm.transpose()*mm).todense()  ## convert to dense matrix
 
-    # calculate the cosine similarity matrix
-    d1 = np.sqrt(np.diag(c1))
-    d1 = np.reshape(d1, (len(d1), 1))  ## convert array to a Nx1 matrix
-    d2 = d1.transpose() * d1
-    cc = np.multiply(c1,1/d2)  ## this is element by element multiplication
-    print('Shape of cosine similarity matrix:', cc.shape)
-    return cc
+def get_tokenized_articles_within_effective_vocab(articles):
+    effective_vocab = get_effective_vocabulary(articles)
+    tok_articles_ev = []
+    # Preserve the chronological order in which we are processing articless
+    # And lose the dictionary structure
+    keys = list(articles.keys())
+    keys.sort()
+    print(keys)
+    for yyyymm in keys:
+        for article in articles[yyyymm]:
+            article_words_ev = [word for word in article if word in effective_vocab]
+            tok_articles_ev.append(article_words_ev)
+    return tok_articles_ev
 
 
-def get_most_similar_words(cc, reqd_word_idx_freq_list, word_list, number=10):
-    words_ordered = [wrd for wrd,_,_ in reqd_word_idx_freq_list] 
-    for tgt_wrd in word_list:
-        # Find index of the target word
-        wrd_idx = words_ordered.index(tgt_wrd)                                      
-        # Associate words with cosine similarity
-        words_dict = {(wrd, cc[ii, wrd_idx]) for ii, wrd in enumerate(words_ordered)}  
-        # Sort by cosine similarity measure
-        words_dict = sorted(words_dict, key=lambda xx:xx[1],reverse=True)
-        print(tgt_wrd, 'most similar:', words_dict[:number], end='\n\n')

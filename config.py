@@ -14,4 +14,7 @@ GDP_CODE = 'N2:GDP'
 
 
 START_YEAR = 1996
+END_YEAR = 2020
 
+
+TOKENIZED_ARTICLES_PATH = TEMP_PATH + '/%s/%s_Articles_Tokenized_%s.json'
