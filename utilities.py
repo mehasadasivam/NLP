@@ -146,9 +146,11 @@ def get_tokenized_articles_within_effective_vocab(articles):
             tok_articles_ev.append(article_words_ev)
     return tok_articles_ev
 
+
 def kern(x):
     """kernel function"""
     return np.power((1-np.power(x,3)),3)
+
 
 def standarized(variable):
     mean = np.cumsum(variable)/np.arange(1, 26)
@@ -157,6 +159,7 @@ def standarized(variable):
     std_variable = (variable - mean)/std_dev
     
     return std_variable
+
 
 def distance(distance_inputs, ref_period):
     distance = np.zeros(len(distance_inputs[0]))
