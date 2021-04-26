@@ -43,8 +43,6 @@ def main():
                 sent_words = nltk.word_tokenize(sentence)
                 sent_words = [word for word in sent_words if ((len(word) > 1) and (len(word) < 20))]
                 sent_words = [word for word in sent_words if word not in stopwords_list]
-#                 for word in sent_words:
-#                     tokenized_sent.append(word)
                 tokenized_sentences.append(sent_words)
         print(fname[-15:-8], 'Done! Article Count:', count, 'Creating word2vec model now.')
 

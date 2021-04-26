@@ -75,7 +75,7 @@ def filtered_article_count(data, language='en', subjects=None, subject_filter_ty
     return count
 
 
-# For Topic Model - Preliminary processing
+# For Topic Model - Pre processing
 
 def get_tokenized_articles(year, theme):
     articles = dict()
