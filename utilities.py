@@ -146,6 +146,33 @@ def get_tokenized_articles_within_effective_vocab(articles):
             tok_articles_ev.append(article_words_ev)
     return tok_articles_ev
 
+def kern(x):
+    """kernel function"""
+    return np.power((1-np.power(x,3)),3)
+
+def standarized(variable):
+    mean = np.cumsum(variable)/np.arange(1, 26)
+    std_dev = np.sqrt((np.cumsum(np.power(variable,2)) - np.power(mean,2)*np.arange(1, 26))/np.arange(0, 25))
+    
+    std_variable = (variable - mean)/std_dev
+    
+    return std_variable
+
+def distance(distance_inputs, ref_period):
+    distance = np.zeros(len(distance_inputs[0]))
+    dist_int = list()
+    
+    for j in range(len(distance_inputs)):
+        distance_process = distance_inputs[j] - distance_inputs[j][ref_period]
+        distance_process = np.power(distance_process,2)
+        dist_int.append(distance_process)
+    
+    for i in range(len(dist_int)):
+        distance = distance + dist_int[i]
+    distance = np.power(distance,0.5)
+    
+    return distance
+
 
 # Filtering dictionaries and creating new corpuses
 
