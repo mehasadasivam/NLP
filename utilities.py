@@ -25,7 +25,6 @@ import nltk
 stopwords_list = nltk.corpus.stopwords.words('english')
 
 
-
 def get_all_filenames():
     folders = glob(os.path.join(DATA_PATH, '*'))
     years_files_dict = dict()
