@@ -147,3 +147,40 @@ def get_tokenized_articles_within_effective_vocab(articles):
     return tok_articles_ev
 
 
+# Filtering dictionaries
+
+# Lists to remove
+months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 
+          'september', 'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 
+          'may', 'jun', 'jul', 'aug', 'oct', 'nov', 'dec', 'sept', 'daily']
+days = ['tuesday', 'day', 'monday', 'thursday', 'wednesday', 'today', 'days', 'friday']
+reuters = ['reuterscom', 'reutersnet', 'thomsonreuterscom', 'eikon', 'breakingviews', 'http', 'reuters', 'thomson', 'https', 'www', 'com', 'newsroom']
+time = ['gmt', 'years', 'year', 'month', 'months', 'quarter', 'quarters', 'week', 'weekly', 'quarterly', 'monthly', 'yearly']
+
+misc = ['pct', 'would', 'since', 'please', 'per', 'also', 'click', 'first', 'second', 'third', 'fourth', 'inc', 'corp']
+
+def filter_dictionary(theme):
+    
+    dictionary_all = gensim.corpora.Dictionary.load(TEMP_PATH + '/%s/%s.dict' % (theme, theme))
+    print('Length of old dictionary:', len(dictionary_all))
+    
+    # Filter by thresholds (extreme words)
+    MIN_NUMBER_OF_ARTICLES = 50000
+    MAX_NUMBER_OF_ARTICLES = 0.7
+
+    dictionary_all.filter_extremes(no_below=MIN_NUMBER_OF_ARTICLES, no_above=MAX_NUMBER_OF_ARTICLES)
+
+    deletable_words = months + days + reuters + time + misc
+
+    # If any of the deletable words remain, store their ids to remove
+    del_ids = [k for k,v in dictionary_all.items() if v in deletable_words]
+
+    len(del_ids)
+
+    dictionary_all.filter_tokens(bad_ids=del_ids)
+
+    len(dictionary_all)
+    
+    dictionary_all.save(TEMP_PATH + '/%s/%s_less_restricted.dict' % (theme, theme))
+    print('Clean dictionary saved! New Length: ', len(dictionary_all))
+    
