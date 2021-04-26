@@ -147,7 +147,7 @@ def get_tokenized_articles_within_effective_vocab(articles):
     return tok_articles_ev
 
 
-# Filtering dictionaries
+# Filtering dictionaries and creating new corpuses
 
 # Lists to remove
 months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 
@@ -165,11 +165,9 @@ def filter_dictionary(theme):
     print('Length of old dictionary:', len(dictionary_all))
     
     # Filter by thresholds (extreme words)
-    MIN_NUMBER_OF_ARTICLES = 50000
-    MAX_NUMBER_OF_ARTICLES = 0.7
-
     dictionary_all.filter_extremes(no_below=MIN_NUMBER_OF_ARTICLES, no_above=MAX_NUMBER_OF_ARTICLES)
 
+    # Updated stop words
     deletable_words = months + days + reuters + time + misc
 
     # If any of the deletable words remain, store their ids to remove
@@ -184,3 +182,131 @@ def filter_dictionary(theme):
     dictionary_all.save(TEMP_PATH + '/%s/%s_less_restricted.dict' % (theme, theme))
     print('Clean dictionary saved! New Length: ', len(dictionary_all))
     
+
+def create_new_corpuses(theme, end_year=None):
+    if not end_year:
+        years = [str(year) for year in range(START_YEAR, END_YEAR + 1)]
+    else:
+        years = [str(year) for year in range(START_YEAR, end_year + 1)]
+    print(years)
+
+    all_tok_articles = []
+    for year in years:
+        with open(TOKENIZED_ARTICLES_PATH % (theme, theme, year)) as f:
+            all_tok_articles.extend(json.load(f))
+        print(TOKENIZED_ARTICLES_PATH % (theme, theme, year), 'done!')
+    
+    dictionary_all = gensim.corpora.Dictionary.load(TEMP_PATH + '/%s/%s_less_restricted.dict' % (theme, theme))
+
+    class MyCorpus:
+        def __iter__(self):
+            for doc in all_tok_articles:
+                # assume there's one document per line, tokens separated by whitespace
+                yield dictionary_all.doc2bow(doc)
+
+    corpus_memory_friendly = MyCorpus()  # doesn't load the corpus into memory!
+    print(corpus_memory_friendly)
+
+    gensim.corpora.MmCorpus.serialize(TEMP_PATH + '/%s/%s_less_restricted.mm' % (theme, theme), corpus_memory_friendly)
+    
+    
+# Regular LDA Utilities
+
+def generate_lda_model(theme, corpus, dictionary, num_topics=15, passes=25, 
+                       iterations=400, eval_every=None, update_every=0, 
+                       alpha='auto', eta='auto'):
+
+    lda = gensim.models.LdaModel(corpus=corpus, id2word=dictionary, alpha='auto', eta='auto',
+                                 iterations=iterations, num_topics=num_topics, passes=passes, 
+                                 eval_every=eval_every, update_every = update_every)
+    
+    # Save lda model
+    tempfile = TEMP_PATH + '/%s/%s_LDA_model_' % (theme, theme) + '_'.join([str(num_topics), str(passes), str(iterations), str(alpha), str(eta)]) 
+    lda.save(tempfile)
+    
+    return lda
+
+
+def get_model(theme, corpus_all, dictionary_all, num_topics=15, passes=25, iterations=400, 
+              eval_every=None, update_every=0, alpha='auto', eta='auto'):
+    """
+    Get the LDA model 
+    
+    """
+    # Check if a model with the same config already exists. 
+    # If it does, load the model instead of generating a new one
+    tempfile = TEMP_PATH + '/%s/%s_LDA_model_' % (theme, theme) + '_'.join([str(num_topics), str(passes), str(iterations), str(alpha), str(eta)])
+
+    if os.path.exists(tempfile):
+        lda = gensim.models.LdaModel.load(tempfile)
+    else:
+        lda = generate_lda_model(theme, corpus_all, dictionary_all, num_topics, passes, 
+                                 iterations, eval_every, update_every, alpha, eta)
+    return lda
+
+
+
+def get_avg_topic_probabilities(lda, corp, num_topics):
+    """
+    For the given LDA model and corpus, get the aggregate probability of each topic 
+    (by iterating over each article in the year's corpus, adding up individual probabilities)
+    Then, divide by the total number of articles for the year to get the average 
+    topic probabilities for the corpus.
+    
+    """
+    all_topics_probabilities = np.zeros(num_topics)
+    for article in corp:
+        article_topics = lda.get_document_topics(article)
+        topic_vec = np.zeros(num_topics)
+        for k, prob in article_topics:
+            topic_vec[k] = prob
+        all_topics_probabilities += topic_vec
+    
+    # Avg topic probabilities
+    avg_topic_probabilities = all_topics_probabilities/float(len(corp))
+    
+    return avg_topic_probabilities
+
+
+def get_top_ten_topics_for_year(year, lda, avg_topic_probabilities):
+    """
+    Using the average topic probabilites, rank the topics and 
+    return the top ten topics for a year.
+    
+    """
+    # Get top 10 topics for each year
+    indices = (-avg_topic_probabilities).argsort()[:10]
+
+    top_topics_words = dict()
+    top_topics_words[year] = dict()
+    rank = 1
+    for ind in indices:
+        top_words = lda.show_topic(ind, topn=10)
+        words, probs = zip(*top_words)
+        top_topics_words[year][rank] = top_words
+        rank += 1
+
+    df = pd.DataFrame.from_dict({(i,j): [x[0] for x in top_topics_words[i][j]] for i in top_topics_words.keys() 
+                            for j in top_topics_words[i].keys()}).T
+    return df, top_topics_words
+
+
+def get_topics(theme, corpus_all, dictionary_all, corpus_by_year, num_topics=15, passes=25, iterations=400, 
+               eval_every=None, update_every=0, alpha='auto', eta='auto'):
+    """
+    Get the top topics for each year, based on an LDA model created using articles across all years
+    
+    """
+    lda = get_model(theme, corpus_all, dictionary_all, num_topics, passes, 
+                    iterations, eval_every, update_every, alpha, eta)
+
+    avg_topics_all = []
+    for year in range(START_YEAR, END_YEAR + 1):
+        avg_topic_probabilities = get_avg_topic_probabilities(lda, corpus_by_year[year], num_topics)
+        df, top_topic_words = get_top_ten_topics_for_year(year, lda, avg_topic_probabilities)
+        display(df)
+        avg_topics_all.append(avg_topic_probabilities)
+
+    return avg_topics_all
+
+
