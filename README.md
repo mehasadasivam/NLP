@@ -1,5 +1,6 @@
 # NLP
 Final project for B9138 - Natural Language Processing
+Authors: Eduardo Espino Robles, Meha Sadasivam
 
 A detailed outline of our plan is in the `Project proposal.pdf`
 
